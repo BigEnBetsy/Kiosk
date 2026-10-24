@@ -26,7 +26,7 @@ import psutil
 GITHUB_REPO_URL = "https://github.com/JOUWNAAM/pc-monitor.git"  # <-- aanpassen
 GITHUB_BRANCH = "data"          # branch waar stats.json op komt (NIET je Pages-branch)
 ENABLE_GITHUB_PUSH = True
-PUSH_INTERVAL = 30              # seconden tussen pushes naar GitHub
+PUSH_INTERVAL = 5               # seconden tussen pushes naar GitHub
 SAMPLE_INTERVAL = 1.0           # seconden tussen metingen
 HTTP_PORT = 8765                # lokale server (dashboard + stats.json)
 LHM_URL = "http://localhost:8085/data.json"   # LibreHardwareMonitor Remote Web Server
@@ -476,11 +476,13 @@ def pusher():
         time.sleep(1)
     init_repo()
     while True:
+        t0 = time.time()
         try:
             push_once()
         except Exception as e:
             log(f"Push-fout: {e}")
-        time.sleep(PUSH_INTERVAL)
+        # Interval rekent vanaf het begin van de push, niet vanaf het einde
+        time.sleep(max(0.2, PUSH_INTERVAL - (time.time() - t0)))
 
 
 # ====================== MAIN ======================

@@ -124,10 +124,10 @@
 const GITHUB_DATA_URL = "https://raw.githubusercontent.com/JOUWNAAM/pc-monitor/data/stats.json";
 // ========================================================================
 
-// Op GitHub Pages: data van GitHub (traag). Lokaal via de agent (http://PC-IP:8765): echt live.
+// Op GitHub Pages: data van GitHub (trager). Lokaal via de agent (http://PC-IP:8765): echt live.
 const IS_PAGES = location.hostname.endsWith("github.io");
 const DATA_URL = IS_PAGES ? GITHUB_DATA_URL : "/stats.json";
-const POLL_MS  = IS_PAGES ? 15000 : 1000;
+const POLL_MS  = IS_PAGES ? 5000 : 1000;
 const STALE_S  = IS_PAGES ? 180 : 6;
 
 const $ = id => document.getElementById(id);
