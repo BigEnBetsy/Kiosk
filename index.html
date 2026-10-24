@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PC Monitor</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card: #131a2e;
+    --card2: #1a2340;
+    --text: #e6ebf5;
+    --muted: #8b97b5;
+    --track: #232d4d;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --accent: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { padding: max(16px, env(safe-area-inset-top)) 18px 24px; -webkit-user-select: none; user-select: none; }
+
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; }
+  header .sub { color: var(--muted); font-size: .9rem; margin-top: 2px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+    background: var(--card); font-size: .9rem; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .badge.live .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: pulse 1.6s infinite; }
+  .badge.stale .dot { background: var(--warn); }
+  .badge.err .dot { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .grid { display: grid; gap: 14px; }
+  .rings { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 14px; }
+  .charts { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 14px; }
+  .two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-bottom: 14px; }
+
+  .card { background: var(--card); border-radius: 18px; padding: 16px 18px; }
+  .card h2 { margin: 0 0 12px; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  .ringcard { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ring { --p: 0; --c: var(--ok); width: 150px; height: 150px; border-radius: 50%;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--track) 0);
+    display: grid; place-items: center; position: relative; transition: background .4s; }
+  .ring::before { content: ""; position: absolute; inset: 14px; background: var(--card); border-radius: 50%; }
+  .ring span { position: relative; font-size: 2rem; font-weight: 700; }
+  .ringlabel { font-weight: 600; }
+  .ringsub { color: var(--muted); font-size: .85rem; margin-top: -6px; text-align: center; }
+
+  canvas { width: 100%; height: 90px; display: block; }
+  .chartval { font-size: 1.6rem; font-weight: 700; margin-bottom: 6px; }
+
+  .bar { height: 10px; background: var(--track); border-radius: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 6px; transition: width .4s, background .4s; }
+  .row { display: flex; justify-content: space-between; gap: 10px; font-size: .9rem; margin: 10px 0 5px; }
+  .row small { color: var(--muted); }
+
+  .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px 14px; }
+  .core .lbl { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 4px; }
+
+  .kv { display: grid; grid-template-columns: 1fr; gap: 0; }
+  .kv div { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--card2); font-size: .9rem; }
+  .kv div:last-child { border-bottom: 0; }
+  .kv b { color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .kv span { text-align: right; word-break: break-word; }
+
+  .sensors { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .sensors h3 { margin: 0 0 6px; font-size: .95rem; }
+  .s { display: flex; justify-content: space-between; font-size: .85rem; padding: 4px 0; }
+  .s b { color: var(--muted); font-weight: 400; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  td, th { padding: 7px 0; text-align: left; border-bottom: 1px solid var(--card2); }
+  th { color: var(--muted); font-weight: 500; font-size: .8rem; }
+  td:not(:first-child), th:not(:first-child) { text-align: right; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="title">PC Monitor</h1>
+    <div class="sub" id="subtitle">Verbinden…</div>
+  </div>
+  <div class="badge" id="status"><span class="dot"></span><span id="statusText">Verbinden…</span></div>
+</header>
+
+<section class="grid rings">
+  <div class="card ringcard"><div class="ring" id="rCpu"><span>–</span></div><div class="ringlabel">CPU gebruik</div><div class="ringsub" id="rCpuSub">&nbsp;</div></div>
+  <div class="card ringcard"><div class="ring" id="rTemp"><span>–</span></div><div class="ringlabel">CPU temperatuur</div><div class="ringsub" id="rTempSub">&nbsp;</div></div>
+  <div class="card ringcard"><div class="ring" id="rRam"><span>–</span></div><div class="ringlabel">RAM gebruik</div><div class="ringsub" id="rRamSub">&nbsp;</div></div>
+  <div class="card ringcard" id="gpuCard"><div class="ring" id="rGpu"><span>–</span></div><div class="ringlabel">GPU temperatuur</div><div class="ringsub" id="rGpuSub">&nbsp;</div></div>
+</section>
+
+<section class="grid charts">
+  <div class="card"><h2>CPU gebruik</h2><div class="chartval" id="vCpu">–</div><canvas id="cCpu"></canvas></div>
+  <div class="card"><h2>CPU temperatuur</h2><div class="chartval" id="vTemp">–</div><canvas id="cTemp"></canvas></div>
+  <div class="card"><h2>RAM gebruik</h2><div class="chartval" id="vRam">–</div><canvas id="cRam"></canvas></div>
+</section>
+
+<section class="card" style="margin-bottom:14px"><h2>CPU-kernen</h2><div class="cores" id="cores"></div></section>
+
+<section class="grid two">
+  <div class="card"><h2>Schijven</h2><div id="disks"></div></div>
+  <div class="card"><h2>Activiteit</h2><div class="kv" id="activity"></div></div>
+</section>
+
+<section class="card" style="margin-bottom:14px" id="procCard"><h2>Top processen</h2>
+  <table><thead><tr><th>Proces</th><th>CPU</th><th>RAM</th></tr></thead><tbody id="procs"></tbody></table>
+</section>
+
+<section class="card" style="margin-bottom:14px"><h2>Specificaties</h2><div class="kv" id="specs"></div></section>
+
+<section class="card"><h2>Sensoren</h2><div class="sensors" id="sensors"></div></section>
+
+<script>
+// ====== CONFIG: pas dit aan naar jouw GitHub-gebruikersnaam en repo ======
+const GITHUB_DATA_URL = "https://raw.githubusercontent.com/JOUWNAAM/pc-monitor/data/stats.json";
+// ========================================================================
+
+// Op GitHub Pages: data van GitHub (traag). Lokaal via de agent (http://PC-IP:8765): echt live.
+const IS_PAGES = location.hostname.endsWith("github.io");
+const DATA_URL = IS_PAGES ? GITHUB_DATA_URL : "/stats.json";
+const POLL_MS  = IS_PAGES ? 15000 : 1000;
+const STALE_S  = IS_PAGES ? 180 : 6;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = (v, d = 0) => (v == null ? "–" : Number(v).toFixed(d));
+
+function bytes(n) {
+  if (n == null) return "–";
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (n >= 1024 && i < 4) { n /= 1024; i++; }
+  return n.toFixed(i > 1 ? 1 : 0) + " " + u[i];
+}
+const rate = n => (n == null ? "–" : bytes(n) + "/s");
+const tempColor = t => t == null ? "#64748b" : t < 60 ? "#4ade80" : t < 80 ? "#fbbf24" : "#f87171";
+const loadColor = p => p < 60 ? "#4ade80" : p < 85 ? "#fbbf24" : "#f87171";
+function uptime(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return (d ? d + "d " : "") + h + "u " + m + "m";
+}
+
+function setRing(id, value, max, text, color) {
+  const el = $(id);
+  el.style.setProperty("--p", value == null ? 0 : Math.min(100, value / max * 100));
+  el.style.setProperty("--c", color);
+  el.querySelector("span").textContent = text;
+}
+
+// ---------- historiek + sparklines ----------
+const hist = { cpu: [], temp: [], ram: [] };
+function push(a, v) { if (v == null) return; a.push(v); if (a.length > 90) a.shift(); }
+function spark(id, data, color, max) {
+  const c = $(id), dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const x = c.getContext("2d");
+  x.scale(dpr, dpr); x.clearRect(0, 0, w, h);
+  if (data.length < 2) return;
+  x.strokeStyle = color; x.lineWidth = 2; x.lineJoin = "round"; x.beginPath();
+  data.forEach((v, i) => {
+    const px = i / (data.length - 1) * w;
+    const py = h - (Math.min(v, max) / max) * (h - 6) - 3;
+    i ? x.lineTo(px, py) : x.moveTo(px, py);
+  });
+  x.stroke();
+  x.lineTo(w, h); x.lineTo(0, h); x.closePath();
+  x.globalAlpha = .15; x.fillStyle = color; x.fill(); x.globalAlpha = 1;
+}
+
+function bar(label, sub, pct, color) {
+  return `<div class="row"><span>${esc(label)}</span><small>${esc(sub)}</small></div>
+          <div class="bar"><i style="width:${Math.min(100, pct)}%;background:${color}"></i></div>`;
+}
+
+// ---------- specs ----------
+function renderSpecs(sp) {
+  if (!sp) return;
+  const rows = [];
+  const add = (k, v) => { if (v) rows.push([k, v]); };
+  add("Systeem", sp.system);
+  add("Besturingssysteem", sp.os);
+  if (sp.cpu) {
+    add("Processor", sp.cpu.name);
+    add("Kernen / threads", (sp.cpu.cores || "?") + " / " + (sp.cpu.threads || "?"));
+    if (sp.cpu.max_mhz) add("Max. kloksnelheid", (sp.cpu.max_mhz / 1000).toFixed(2) + " GHz");
+    if (sp.cpu.l2_kb || sp.cpu.l3_kb) add("Cache", "L2 " + bytes((sp.cpu.l2_kb || 0) * 1024) + " · L3 " + bytes((sp.cpu.l3_kb || 0) * 1024));
+  }
+  (sp.gpus || []).forEach((g, i) => {
+    add("GPU" + (sp.gpus.length > 1 ? " " + (i + 1) : ""), g.name + (g.vram_bytes ? " · " + bytes(g.vram_bytes) + " VRAM" : ""));
+    if (g.driver) add("GPU-driver", g.driver);
+    if (g.resolution) add("Beeldscherm", g.resolution);
+  });
+  if (sp.ram) {
+    add("Werkgeheugen", bytes(sp.ram.total));
+    (sp.ram.modules || []).forEach((m, i) =>
+      add("RAM-module " + (i + 1), [bytes(m.size), m.speed ? m.speed + " MT/s" : "", m.maker, m.part].filter(Boolean).join(" · ")));
+  }
+  add("Moederbord", sp.board);
+  add("BIOS", sp.bios);
+  (sp.disks || []).forEach((d, i) => add("Schijf " + (i + 1), d.model + " · " + bytes(d.size) + (d.iface ? " · " + d.iface : "")));
+  $("specs").innerHTML = rows.map(r => `<div><b>${esc(r[0])}</b><span>${esc(r[1])}</span></div>`).join("");
+}
+
+// ---------- sensoren ----------
+function renderSensors(list) {
+  if (!list || !list.length) {
+    $("sensors").innerHTML = `<div class="s"><b>Geen sensordata. Start LibreHardwareMonitor met Remote Web Server aan.</b></div>`;
+    return;
+  }
+  const byHw = {};
+  list.forEach(s => (byHw[s.hw] = byHw[s.hw] || []).push(s));
+  $("sensors").innerHTML = Object.keys(byHw).map(hw => {
+    const items = byHw[hw].slice(0, 30).map(s => {
+      const col = s.unit === "°C" ? `style="color:${tempColor(s.value)}"` : "";
+      return `<div class="s"><b>${esc(s.name)}</b><span ${col}>${num(s.value, s.unit === "RPM" || s.unit === "MHz" ? 0 : 1)} ${esc(s.unit)}</span></div>`;
+    }).join("");
+    return `<div><h3>${esc(hw)}</h3>${items}</div>`;
+  }).join("");
+}
+
+// ---------- hoofdrender ----------
+let lastEpoch = 0;
+let lastData = null;
+
+function render(d) {
+  lastData = d;
+  const cpu = d.cpu || {}, ram = d.ram || {}, gpu = d.gpu || {};
+
+  $("title").textContent = (d.host || (d.specs && d.specs.system) || "PC") + " · live monitor";
+  $("subtitle").textContent = (d.specs && d.specs.cpu ? d.specs.cpu.name : "") + (d.uptime_s != null ? " · uptime " + uptime(d.uptime_s) : "");
+
+  setRing("rCpu", cpu.percent, 100, num(cpu.percent) + "%", loadColor(cpu.percent || 0));
+  $("rCpuSub").textContent = cpu.freq_mhz ? (cpu.freq_mhz / 1000).toFixed(2) + " GHz" + (cpu.power_w != null ? " · " + num(cpu.power_w, 0) + " W" : "") : "\u00a0";
+
+  setRing("rTemp", cpu.temp_c, 100, cpu.temp_c == null ? "n.v.t." : num(cpu.temp_c) + "°C", tempColor(cpu.temp_c));
+  $("rTempSub").textContent = cpu.temp_c == null ? "Start LibreHardwareMonitor" : "\u00a0";
+
+  setRing("rRam", ram.percent, 100, num(ram.percent) + "%", loadColor(ram.percent || 0));
+  $("rRamSub").textContent = bytes(ram.used) + " van " + bytes(ram.total);
+
+  const hasGpu = gpu.temp_c != null;
+  $("gpuCard").classList.toggle("hidden", !hasGpu);
+  if (hasGpu) {
+    setRing("rGpu", gpu.temp_c, 100, num(gpu.temp_c) + "°C", tempColor(gpu.temp_c));
+    $("rGpuSub").textContent = gpu.load != null ? "Load " + num(gpu.load) + "%" : "\u00a0";
+  }
+
+  // grafieken
+  push(hist.cpu, cpu.percent); push(hist.temp, cpu.temp_c); push(hist.ram, ram.percent);
+  $("vCpu").textContent = num(cpu.percent) + "%";
+  $("vTemp").textContent = cpu.temp_c == null ? "n.v.t." : num(cpu.temp_c) + "°C";
+  $("vRam").textContent = num(ram.percent) + "%";
+  spark("cCpu", hist.cpu, "#60a5fa", 100);
+  spark("cTemp", hist.temp, "#fb923c", 100);
+  spark("cRam", hist.ram, "#a78bfa", 100);
+
+  // kernen
+  $("cores").innerHTML = (cpu.per_core || []).map((p, i) =>
+    `<div class="core"><div class="lbl"><span>Core ${i}</span><span>${num(p)}%</span></div>
+     <div class="bar"><i style="width:${p}%;background:${loadColor(p)}"></i></div></div>`).join("");
+
+  // schijven
+  $("disks").innerHTML = (d.disks || []).map(k =>
+    bar(k.mount, bytes(k.used) + " / " + bytes(k.total), k.percent, loadColor(k.percent))).join("") || "<small>Geen data</small>";
+
+  // activiteit
+  const sw = d.swap || {}, net = d.net || {}, io = d.disk_io || {};
+  $("activity").innerHTML = [
+    ["Netwerk ↓ download", rate(net.down_bps)],
+    ["Netwerk ↑ upload", rate(net.up_bps)],
+    ["Schijf lezen", rate(io.read_bps)],
+    ["Schijf schrijven", rate(io.write_bps)],
+    ["RAM beschikbaar", bytes(ram.available)],
+    ["Wisselgeheugen", bytes(sw.used) + " / " + bytes(sw.total)],
+    ["Uptime", d.uptime_s != null ? uptime(d.uptime_s) : "–"],
+  ].map(r => `<div><b>${r[0]}</b><span>${r[1]}</span></div>`).join("");
+
+  // processen (alleen als de agent ze meestuurt, lokaal)
+  const hasProc = d.processes && d.processes.length;
+  $("procCard").classList.toggle("hidden", !hasProc);
+  if (hasProc) {
+    $("procs").innerHTML = d.processes.map(p =>
+      `<tr><td>${esc(p.name)}${p.count > 1 ? " ×" + p.count : ""}</td><td>${num(p.cpu, 1)}%</td><td>${bytes(p.mem)}</td></tr>`).join("");
+  }
+
+  renderSpecs(d.specs);
+  renderSensors(d.sensors);
+}
+
+function updateStatus(err) {
+  const el = $("status");
+  el.className = "badge";
+  if (err || !lastData) { el.classList.add("err"); $("statusText").textContent = err ? "Geen verbinding" : "Verbinden…"; return; }
+  const age = Date.now() / 1000 - lastData.epoch;
+  if (age > STALE_S) {
+    el.classList.add("stale");
+    $("statusText").textContent = "PC offline? Laatste data " + Math.round(age / 60) + " min geleden";
+  } else {
+    el.classList.add("live");
+    $("statusText").textContent = (IS_PAGES ? "Live via GitHub" : "Live") + " · " + new Date(lastData.epoch * 1000).toLocaleTimeString("nl-BE");
+  }
+}
+
+async function tick() {
+  let failed = false;
+  try {
+    const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    if (d && d.epoch && d.epoch !== lastEpoch) { lastEpoch = d.epoch; render(d); }
+  } catch (e) {
+    failed = true;
+  }
+  updateStatus(failed);
+  setTimeout(tick, POLL_MS);
+}
+tick();
+setInterval(() => updateStatus(false), 5000);
+window.addEventListener("resize", () => {
+  spark("cCpu", hist.cpu, "#60a5fa", 100);
+  spark("cTemp", hist.temp, "#fb923c", 100);
+  spark("cRam", hist.ram, "#a78bfa", 100);
+});
+</script>
+</body>
+</html>
